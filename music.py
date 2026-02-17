@@ -17,8 +17,8 @@ current_song = None
 
 #Functions
 def add_song():
-    files = fieldialog.askopenfilenames(
-        Filetypes=[("Audio","*.mp3","*.wav")]
+    files = filedialog.askopenfilenames(
+        filetypes=[("Audio Files","*.mp3 *.wav")]
     )
     for file in files:
         playlist.insert(tk.END, file)
@@ -56,5 +56,14 @@ tk.Button(btn_frame, text="Play", command=play_song).grid(row=0, column=1, padx=
 tk.Button(btn_frame, text="Pause", command=pause_song).grid(row=0, column=2, padx=5)
 tk.Button(btn_frame, text="Repeat", command=repeat_song).grid(row=0, column=3, padx=5)
 
-root = tk.Tk()
+volume_slider = tk.Scale(
+root,
+from_=0,
+to=100,
+orient="horizontal",
+label="Volume",
+command=set_volume
+)
+volume_slider.set(70)
+volume_slider.pack(fill="x", padx=10)
 root.mainloop()
