@@ -5,7 +5,7 @@ import os
 import time
 import sqlite3
 
-# ================= DATABASE =================
+# DATABASE
 conn = sqlite3.connect("music.db")
 cursor = conn.cursor()
 
@@ -27,18 +27,12 @@ playlist = []
 current_index = None
 is_paused = False
 repeat = False
+seeking = False
+# guard against seek feedback loop
+ended_handled = False
+# prevents repeated next_sond on ended state
 
 # FUNCTIONS
-
-def import_folder():
-    folder = filedialog.askdirectory()
-    if folder:
-        for file in os.listdir(folder):
-            if file.endswith(('.mp3', '.wav', '.flac')):
-                path = os.path.join(folder, file)
-                playlist.append(path)
-                listbox.insert(tk.END, file)
-
 def add_song():
     file = filedialog.askopenfilename(
         filetypes=[("Audio Files", "*.mp3 *.wav *.flac")]
@@ -106,8 +100,10 @@ def toggle_repeat():
     messagebox.showinfo("Repeat", f"Repeat is {status}")
 
 def update_progress():
-    length = player.get_length()
-    current = player.get_time()
+    global ended_handled
+    if not seeking:
+        length = player.get_length()
+        current = player.get_time()
 
     if length > 0:
         progress.config(to=length)
@@ -118,7 +114,8 @@ def update_progress():
         time_label.config(text=f"{current_time} / {total_time}")
 
         # Auto next or repeat
-        if player.get_state() == vlc.State.Ended:
+        if player.get_state() == vlc.State.Ended and not ended_handled:
+            ended_handled = True
             if repeat:
                 player.play()
             else:
@@ -129,6 +126,35 @@ def update_progress():
 def seek_song(value):
     if player.get_length() > 0:
         player.set_time(int(float(value)))
+        
+def delete_song():
+    global current_index
+
+    selected = listbox.curselection()
+
+    if not selected:
+        messagebox.showwarning("No Selection", "Select a song to delete")
+        return
+
+    index = selected[0]
+    song_path = playlist[index]
+
+    # Remove from database
+    cursor.execute("DELETE FROM songs WHERE path = ?", (song_path,))
+    conn.commit()
+
+    # Remove from playlist list
+    playlist.pop(index)
+
+    # Remove from UI
+    listbox.delete(index)
+
+    # Reset current index if needed
+    if current_index == index:
+        player.stop()
+        current_index = None
+
+    messagebox.showinfo("Deleted", "Song removed successfully")
 
 def set_volume(value):
     player.audio_set_volume(int(float(value)))
@@ -143,6 +169,8 @@ def load_from_database():
             playlist.append(song_path)
             listbox.insert(tk.END, os.path.basename(song_path))
 
+
+
 # UI
 
 root = tk.Tk()
@@ -155,12 +183,13 @@ listbox.pack(pady=10)
 control_frame = tk.Frame(root)
 control_frame.pack(pady=10)
 
-tk.Button(control_frame, text="Import Folder", command=import_folder).grid(row=0, column=0, padx=5)
+# tk.Button(control_frame, text="Import Folder", command=import_folder).grid(row=0, column=0, padx=5)
 tk.Button(control_frame, text="Add Song", command=add_song).grid(row=0, column=1, padx=5)
 tk.Button(control_frame, text="Previous", command=previous_song).grid(row=0, column=2, padx=5)
 tk.Button(control_frame, text="Play/Pause", command=toggle_play).grid(row=0, column=3, padx=5)
 tk.Button(control_frame, text="Next", command=next_song).grid(row=0, column=4, padx=5)
 tk.Button(control_frame, text="Repeat", command=toggle_repeat).grid(row=0, column=5, padx=5)
+tk.Button(control_frame, text="Delete", command=delete_song).grid(row=0, column=6, padx=5)
 
 progress = ttk.Scale(root, from_=0, to=100, orient="horizontal", length=600, command=seek_song)
 progress.pack(pady=10)
